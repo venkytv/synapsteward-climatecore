@@ -7,13 +7,12 @@
 
 import argparse
 import asyncio
-from collections import deque
+from collections.abc import Awaitable
 from datetime import datetime
 import json
 import logging
 import nats
 import pydantic
-from typing import Deque
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -30,11 +29,16 @@ class SensorBounds(pydantic.BaseModel):
     min: float
     max: float
 
+class Alert(pydantic.BaseModel):
+    message: str = "Sensor data out of bounds"
+    sensor_data: SensorData
+    sensor_bounds: SensorBounds
+
 class Config(pydantic.BaseModel):
     nats_server: str
-    nats_stream: str
+    nats_sensor_stream: str
+    nats_alerts_subject_prefix: str
     nats_config_subject: str
-    history_length: int
 
     sensor_bounds: dict[str, SensorBounds] = {}
 
@@ -71,7 +75,12 @@ async def config_listener(js: nats.js.JetStreamContext, config: Config):
             pass
 
 async def main(config: Config):
-    nc = await nats.connect(config.nats_server)
+    async def connection_error_cb(e):
+        logger.warning("Connection error: %s" % (e))
+
+    nc = await nats.connect(config.nats_server,
+                            disconnected_cb=connection_error_cb,
+                            error_cb=connection_error_cb)
     js = nc.jetstream() # Create a JetStream context
 
     # Create a background task to listen for configuration updates
@@ -89,15 +98,16 @@ async def main(config: Config):
         # Ignore any messages that were sent before the consumer was created
         deliver_policy=nats.js.api.DeliverPolicy.NEW,
     )
-    logger.debug("Subscribing to stream: %s" % (config.nats_stream))
+    logger.debug("Subscribing to stream: %s" % (config.nats_sensor_stream))
     sub = await js.pull_subscribe("", # Subscribe to all messages
-                                  stream=config.nats_stream,
+                                  stream=config.nats_sensor_stream,
                                   config=sensor_consumer_config)
 
-    sensor_data_history: Deque[SensorData] = deque(maxlen=config.history_length)
     while True:
         try:
             msgs = await sub.fetch(batch=10, timeout=2)
+
+            alert_tasks: list[Awaitable[None]] = []
 
             for msg in msgs:
                 logger.debug("Received message: %s" % (msg))
@@ -110,16 +120,24 @@ async def main(config: Config):
                         continue
 
                     logger.debug("Loaded sensor data: %s" % (sensor_data))
-                    sensor_data_history.append(sensor_data)
 
                     bounds = config.sensor_bounds[sensor_data.name]
                     if sensor_data.value < bounds.min or sensor_data.value > bounds.max:
+                        alert_subject = f"{config.nats_alerts_subject_prefix}.{sensor_data.name}"
+                        alert = Alert(sensor_data=sensor_data, sensor_bounds=bounds)
                         logger.warning("Sensor data out of bounds: %s" % (sensor_data))
-                        # TODO: Pass sensor_data_history to LLM for evaluation
+
+                        # Publish the alert, which will be picked up by a higher-level module
+                        logger.debug("Publishing alert: %s %s" % (alert_subject, alert))
+                        task = nc.publish(alert_subject, alert.model_dump_json().encode("utf-8"))
+                        alert_tasks.append(task)
                 except pydantic.ValidationError as e:
                     logger.error("Invalid sensor data: %s: %s" % (msg.data.decode(), e))
                 finally:
                     await msg.ack()
+
+            # Wait for all alerts to be published
+            await asyncio.gather(*alert_tasks)
 
         except asyncio.TimeoutError:
             pass
@@ -130,12 +148,12 @@ if __name__ == "__main__":
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--nats-server", type=str, help="NATS server URL",
                         default="nats://localhost:4222")
-    parser.add_argument("--nats-stream", type=str, help="NATS stream name",
-                        default="environmental_sensors")
+    parser.add_argument("--nats-sensor-stream", type=str, help="NATS sensor stream name",
+                        default="sensors_environmental")
+    parser.add_argument("--nats-alerts-subject-prefix", type=str, help="NATS alerts message subject prefix",
+                        default="alerts.climatecore")
     parser.add_argument("--nats-config-subject", type=str, help="NATS config message subject",
                         default="config.climatecore")
-    parser.add_argument("--history-length", type=int, help="Number of historical values to store",
-                        default=50)
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
@@ -144,9 +162,9 @@ if __name__ == "__main__":
 
     config = Config(
         nats_server=args.nats_server,
-        nats_stream=args.nats_stream,
+        nats_sensor_stream=args.nats_sensor_stream,
+        nats_alerts_subject_prefix=args.nats_alerts_subject_prefix,
         nats_config_subject=args.nats_config_subject,
-        history_length=args.history_length,
     )
 
     asyncio.run(main(config))
