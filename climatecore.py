@@ -8,31 +8,15 @@
 import argparse
 import asyncio
 from collections.abc import Awaitable
-from datetime import datetime
 import json
 import logging
 import nats
 import pydantic
 
+from models import Alert, SensorBounds, SensorData
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-class SensorData(pydantic.BaseModel):
-    name: str
-    device_id: str
-    location: str
-    value: float
-    timestamp: datetime
-
-class SensorBounds(pydantic.BaseModel):
-    sensor: str
-    min: float
-    max: float
-
-class Alert(pydantic.BaseModel):
-    message: str = "Sensor data out of bounds"
-    sensor_data: SensorData
-    sensor_bounds: SensorBounds
 
 class Config(pydantic.BaseModel):
     nats_server: str
