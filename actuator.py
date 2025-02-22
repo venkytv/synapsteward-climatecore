@@ -101,6 +101,9 @@ async def main():
     parser.add_argument("--nats-actions-subject", type=str,
                         help="NATS actions message subject",
                         default="notifications.climatecore")
+    parser.add_argument("--nats-upstream-subject", type=str,
+                        help="NATS subject to pass on messages to higher-level modules",
+                        default="upstream.climatecore")
     parser.add_argument("--llm-model", default=default_llm_model,
                         help="LLM model to use for analysis")
     parser.add_argument("--debug", action="store_true",
@@ -157,11 +160,17 @@ async def main():
             subject=args.nats_actions_subject,
             model=Notification,
         )
+        upstream = Stream(
+            connection=nc,
+            subject=args.nats_upstream_subject,
+            model=Action,
+        )
         resp = await asyncio.gather(
             alert.publish(
                 Notification(title=action.action, message=action.reason)),
             memory.publish(
                 Memory(message=f"{action.action}: {action.reason}")),
+            upstream.publish(action),
         )
         logging.debug("Response: %s", resp)
     else:

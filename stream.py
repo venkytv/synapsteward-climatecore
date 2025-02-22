@@ -4,7 +4,7 @@ import asyncio
 import logging
 import nats
 import pydantic
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +13,9 @@ class Stream:
 
     def __init__(self,
                  connection: nats.NATS,
-                 stream: str = None,
-                 subject: str = None,
-                 consumer: str = None,
+                 stream: Optional[str] = None,
+                 subject: Optional[str] = None,
+                 consumer: Optional[str] = None,
                  model: Any = None,
                  timeout: int = 1):
         self.connection = connection
@@ -48,7 +48,7 @@ class Stream:
         logger.debug("Fetching %d messages from stream %s", nmsgs, self.stream)
         psub = await self.jetstream.pull_subscribe("", stream=self.stream,
                                                      durable=self.consumer)
-        response = []
+        response: list[Any] = []
 
         try:
             logger.debug("Fetching messages with timeout %d", self.timeout)

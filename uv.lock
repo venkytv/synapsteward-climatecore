@@ -819,6 +819,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "retry" },
+    { name = "types-retry" },
 ]
 
 [package.metadata]
@@ -830,6 +831,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10.6" },
     { name = "pydantic-settings", specifier = ">=2.7.1" },
     { name = "retry", specifier = ">=0.9.2" },
+    { name = "types-retry", specifier = ">=0.9.9.20241221" },
 ]
 
 [[package]]
@@ -903,6 +905,15 @@ wheels = [
 sentencepiece = [
     { name = "protobuf" },
     { name = "sentencepiece" },
+]
+
+[[package]]
+name = "types-retry"
+version = "0.9.9.20241221"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/a0/e0c25d9bcae5b40383f3dbdad177609df8bab44ae893e0943f3c5fd22a1e/types_retry-0.9.9.20241221.tar.gz", hash = "sha256:ebad6d495a5a04ab0d06d4156a665528c3b84a8461aa019dd6e5d3e33c2aa1e0", size = 7640 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/9f/b40bb48b3fd9a6dfc468423a27b66f28acdc73430c2e0a517c897d480570/types_retry-0.9.9.20241221-py3-none-any.whl", hash = "sha256:d1ef1a60573470525e65267192dd712b93f0f0acf3019c4c1afe173cde3289cb", size = 7618 },
 ]
 
 [[package]]
