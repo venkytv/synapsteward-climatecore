@@ -20,9 +20,7 @@ class Stream:
                 sys.exit(1)
             raise e
         logger.debug("Connecting to NATS server at %s", url)
-        connection = await nats.connect(url,
-                                        error_cb=error_cb,
-                                        disconnected_cb=error_cb)
+        connection = await nats.connect(url, error_cb=error_cb)
         return connection
 
     def __init__(self,
