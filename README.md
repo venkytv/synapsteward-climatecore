@@ -30,7 +30,7 @@ out-of-bounds, it forwards the data history for further evaluation.
 ## Installation
 
 1. Ensure Python 3.6 or higher is installed on your system.
-2. Install the required dependencies by running:
+2. If not using `uv`, install the required dependencies by running:
    ```bash
    pip install nats-py pydantic
    ```
