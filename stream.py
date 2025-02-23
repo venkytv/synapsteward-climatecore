@@ -4,12 +4,26 @@ import asyncio
 import logging
 import nats
 import pydantic
+import sys
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 class Stream:
     EPHEMERAL = "___ephemeral___"
+
+    @classmethod
+    async def connect(cls, url: str, abort_on_error: bool = True) -> nats.NATS:
+        async def error_cb(e):
+            logger.error("Error: %s", e)
+            if abort_on_error:
+                sys.exit(1)
+            raise e
+        logger.debug("Connecting to NATS server at %s", url)
+        connection = await nats.connect(url,
+                                        error_cb=error_cb,
+                                        disconnected_cb=error_cb)
+        return connection
 
     def __init__(self,
                  connection: nats.NATS,

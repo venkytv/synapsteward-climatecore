@@ -116,8 +116,7 @@ async def main():
     logging.basicConfig(level=loglevel,
                         format="%(asctime)s [%(levelname)s] %(message)s")
 
-    logging.debug("Connecting to NATS server at %s", args.nats_server)
-    nc = await nats.connect(args.nats_server)
+    nc = await Stream.connect(args.nats_server)
 
     alerts = Stream(
         connection=nc,
