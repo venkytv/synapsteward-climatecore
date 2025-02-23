@@ -20,9 +20,10 @@ from stream import Stream
 
 class Action(pydantic.BaseModel):
     action: str
+    priority: int = 0
     reason: str
 
-sample_action = Action(action="action details", reason="reason for the action")
+sample_action = Action(action="action details", priority=2, reason="reason for the action")
 sample_no_action = Action(action="", reason="reason for no action")
 
 def construct_prompt(alerts: list[Alert], memory: list[Memory]) -> str:
@@ -33,7 +34,8 @@ def construct_prompt(alerts: list[Alert], memory: list[Memory]) -> str:
     Below is a set of climate sensor alerts from a monitoring system. Your task
     is to analyse these alerts and suggest ZERO OR ONE recommendations for
     action, such as adjusting ventilation, investigating anomalies, or
-    setting new sensor bounds.
+    setting new sensor bounds. Also include a priority for the action on a scale
+    of 1 to 3, with 3 being the highest priority.
     The recommendation, if any, should be in the following format in JSON:
     {sample_action.model_dump_json()}
     If you have no recommendations, you can suggest an a reponse in the
@@ -101,8 +103,8 @@ async def main():
     parser.add_argument("--nats-actions-subject", type=str,
                         help="NATS actions message subject",
                         default="notifications.climatecore")
-    parser.add_argument("--nats-upstream-subject", type=str,
-                        help="NATS subject to pass on messages to higher-level modules",
+    parser.add_argument("--nats-upstream-subject-prefix", type=str,
+                        help="NATS subject prefix to pass on messages to higher-level modules",
                         default="upstream.climatecore")
     parser.add_argument("--llm-model", default=default_llm_model,
                         help="LLM model to use for analysis")
@@ -159,9 +161,12 @@ async def main():
             subject=args.nats_actions_subject,
             model=Notification,
         )
+
+        prioritised_subject = f"{args.nats_upstream_subject_prefix}.priority{action.priority}"
+        logging.debug("Publishing upstream to %s", prioritised_subject)
         upstream = Stream(
             connection=nc,
-            subject=args.nats_upstream_subject,
+            subject=prioritised_subject,
             model=Action,
         )
         resp = await asyncio.gather(
