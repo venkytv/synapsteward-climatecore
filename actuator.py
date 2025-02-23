@@ -38,8 +38,8 @@ def construct_prompt(alerts: list[Alert], memory: list[Memory]) -> str:
     of 1 to 3, with 3 being the highest priority.
     The recommendation, if any, should be in the following format in JSON:
     {sample_action.model_dump_json()}
-    If you have no recommendations, you can suggest an a reponse in the
-    following format in JSON:
+    If you have no recommendations, you can suggest a response in the following
+    format in JSON:
     {sample_no_action.model_dump_json()}
     Err on the side of not suggesting an action if you are unsure.
 
