@@ -132,7 +132,7 @@ if __name__ == "__main__":
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--nats-server", type=str, help="NATS server URL",
                         default="nats://localhost:4222")
-    parser.add_argument("--nats-sensor-stream", type=str, help="NATS sensor stream name",
+    parser.add_argument("--nats-sensor-stream", type=str, help="NATS input sensor stream name",
                         default="sensors_environmental")
     parser.add_argument("--nats-alerts-subject-prefix", type=str, help="NATS alerts message subject prefix",
                         default="alerts.climatecore")
