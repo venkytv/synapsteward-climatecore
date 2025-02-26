@@ -182,7 +182,8 @@ if __name__ == "__main__":
                         default="config.climatecore")
     parser.add_argument("--current-state-file", type=str, help="File to store the current state",
                         default=os.path.expanduser("~/.synapsteward-climatecore-stage.json"))
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging",
+                        default=os.environ.get("DEBUG", False))
     args = parser.parse_args()
 
     if args.debug:
