@@ -137,11 +137,13 @@ async def main(config: Config):
                     current_state = State.model_validate_json(f.read())
             except FileNotFoundError:
                 current_state = State()
+            logger.debug("Current state: %s" % (current_state))
 
             if len(alert_tasks) > 0:
                 new_state = State(state=States.ALERTING)
             else:
                 new_state = State(state=States.NOT_ALERTING)
+            logger.debug("New state: %s" % (new_state))
 
             with open(args.current_state_file, "w") as f:
                 f.write(new_state.model_dump_json())
