@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "llm>=0.22",
-    "llm-mlx>=0.3",
+    "llm-mlx>=0.3; sys_platform == 'darwin'",
     "mypy>=1.15.0",
     "nats-py>=2.9.0",
     "pydantic-settings>=2.7.1",
