@@ -8,9 +8,11 @@
 import argparse
 import asyncio
 from collections.abc import Awaitable
+import enum
 import json
 import logging
 import nats
+import os
 import pydantic
 
 from models import Alert, SensorBounds, SensorData
@@ -25,6 +27,13 @@ class Config(pydantic.BaseModel):
     nats_config_subject: str
 
     sensor_bounds: dict[str, SensorBounds] = {}
+
+class States(enum.IntEnum):
+    NOT_ALERTING = 0
+    ALERTING = 1
+
+class State(pydantic.BaseModel):
+    state: States = States.ALERTING
 
 async def config_listener(js: nats.js.JetStreamContext, config: Config):
     """Listen for configuration messages and update the configuration"""
@@ -93,6 +102,7 @@ async def main(config: Config):
 
             alert_tasks: list[Awaitable[None]] = []
 
+            last_sensor_data = (None, None)
             for msg in msgs:
                 logger.debug("Received message: %s" % (msg))
                 data = json.loads(msg.data)
@@ -106,6 +116,7 @@ async def main(config: Config):
                     logger.debug("Loaded sensor data: %s" % (sensor_data))
 
                     bounds = config.sensor_bounds[sensor_data.name]
+                    last_sensor_data = (sensor_data, bounds)
                     if sensor_data.value < bounds.min or sensor_data.value > bounds.max:
                         alert_subject = f"{config.nats_alerts_subject_prefix}.{sensor_data.name}"
                         alert = Alert(sensor_data=sensor_data, sensor_bounds=bounds)
@@ -119,6 +130,37 @@ async def main(config: Config):
                     logger.error("Invalid sensor data: %s: %s" % (msg.data.decode(), e))
                 finally:
                     await msg.ack()
+
+            # Load the current state
+            try:
+                with open(args.current_state_file, "r") as f:
+                    current_state = State.model_validate_json(f.read())
+            except FileNotFoundError:
+                current_state = State()
+
+            if len(alert_tasks) > 0:
+                new_state = State(state=States.ALERTING)
+            else:
+                new_state = State(state=States.NOT_ALERTING)
+
+            with open(args.current_state_file, "w") as f:
+                f.write(new_state.model_dump_json())
+
+            # If there are no alerts, but we are in an alerting state, add an
+            # alert saying the system is back to normal
+            if current_state.state == States.ALERTING and new_state.state == States.NOT_ALERTING \
+                    and last_sensor_data[0] is not None:
+                logger.info("Resetting alerting state")
+
+                back_to_normal = Alert(
+                    message="System back to normal",
+                    sensor_data=last_sensor_data[0],
+                    sensor_bounds=last_sensor_data[1])
+
+                alert_subject = f"{config.nats_alerts_subject_prefix}.{last_sensor_data[0].name}"
+                logger.debug("Publishing back-to-normal alert: %s %s" % (alert_subject, back_to_normal))
+                task = nc.publish(alert_subject, back_to_normal.model_dump_json().encode("utf-8"))
+                alert_tasks.append(task)
 
             # Wait for all alerts to be published
             await asyncio.gather(*alert_tasks)
@@ -138,6 +180,8 @@ if __name__ == "__main__":
                         default="alerts.climatecore")
     parser.add_argument("--nats-config-subject", type=str, help="NATS config message subject",
                         default="config.climatecore")
+    parser.add_argument("--current-state-file", type=str, help="File to store the current state",
+                        default=os.path.expanduser("~/.synapsteward-climatecore-stage.json"))
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
