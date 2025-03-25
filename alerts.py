@@ -55,7 +55,9 @@ def construct_prompt(alerts: list[Alert], state: str) -> str:
     to store state in any format or encoding you like as long as it can be
     stored in a JSON object. The objective is to use this to make sure the
     colours are consistent across runs and have some logic to how they are
-    assigned for different sensors, locations, etc.
+    assigned for different sensors, locations, etc. Do store the logic for the
+    colour assignment in the "state" field.
+    The sensors can be temperature, humidity, or CO2.
 
     If there is no need for an alert, you can suggest use #000000 for black.
 
