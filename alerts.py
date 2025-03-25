@@ -84,6 +84,12 @@ def construct_prompt(alerts: list[Alert], state: str) -> str:
     most urgent and 1 being the least.  Do not set the brightness to 100 unless
     the alert is very urgent.
 
+    Note that the alerts will be addressed by humans, and so might not be
+    addressed immediately. Set the urgency appropriately based on the real
+    world implications of the alert. For instance, a high CO2 of 1200 ppm is
+    something that can be addressed within a few hours, while a high CO2 of
+    3000 ppm is something that needs to be addressed immediately.
+
     IMPORTANT: RETURN JUST ONE JSON OBJECT WITH THE COLOUR, REASON, AND STATE,
                OR AN OBJECT WITH #000000 COLOUR IF YOU HAVE NO RECOMMENDATIONS.
                DO NOT ADD ANY ADDITIONAL COMMENTS.
