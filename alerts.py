@@ -113,7 +113,7 @@ def load_alert_colour(llm: llm.models.Model, prompt: str) -> Colour:
     return Colour.model_validate_json(colour)
 
 async def main():
-    default_llm_model = os.getenv("LLM_MODEL", "gpt-4-turbo")
+    default_llm_model = os.getenv("LLM_MODEL", "gpt-4o-mini")
     default_nats_server = os.getenv("NATS_SERVER", "nats://localhost:4222")
 
     parser = argparse.ArgumentParser(
