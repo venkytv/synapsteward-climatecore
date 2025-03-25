@@ -37,7 +37,7 @@ sample_colour = Colour(
     colour="#FF0000",
     brightness=50,
     reason="reason for the colour",
-    state="rule:green based colors for CO2, cooler shades for living room, warmer for bedroom;co2_living_room=#f44336;co2_bedroom=#f33567",
+    state="rule:green based colors for CO2, blue for humidity, cooler shades for living room, warmer for bedroom;co2_living_room=#2ada75;co2_bedroom=#87da2a",
 )
 
 def construct_prompt(alerts: list[Alert], state: str) -> str:
@@ -88,7 +88,8 @@ def construct_prompt(alerts: list[Alert], state: str) -> str:
     addressed immediately. Set the urgency appropriately based on the real
     world implications of the alert. For instance, a high CO2 of 1200 ppm is
     something that can be addressed within a few hours, while a high CO2 of
-    3000 ppm is something that needs to be addressed immediately.
+    3000 ppm is something that needs to be addressed immediately. Similarly,
+    high humidity of 70% is not very urgent.
 
     IMPORTANT: RETURN JUST ONE JSON OBJECT WITH THE COLOUR, REASON, AND STATE,
                OR AN OBJECT WITH #000000 COLOUR IF YOU HAVE NO RECOMMENDATIONS.
