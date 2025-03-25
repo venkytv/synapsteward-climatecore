@@ -41,6 +41,8 @@ class Stream:
             self.consumer = None
         elif not consumer:
             self.consumer = f"{stream}_consumer"
+        else:
+            self.consumer = consumer
 
     async def publish(self, data: Any) -> None:
         if not self.subject:
