@@ -88,23 +88,25 @@ async def main(config: Config):
 
     # Create a consumer for the sensor data stream
     sensor_consumer_config = nats.js.api.ConsumerConfig(
-        # Ignore any messages that were sent before the consumer was created
-        deliver_policy=nats.js.api.DeliverPolicy.NEW,
+        # Pick the last sensor data message per subject
+        deliver_policy=nats.js.api.DeliverPolicy.LAST_PER_SUBJECT,
+        filter_subjects=["sensor.environmental.>"],
     )
     logger.debug("Subscribing to stream: %s" % (config.nats_sensor_stream))
     sub = await js.pull_subscribe("", # Subscribe to all messages
                                   stream=config.nats_sensor_stream,
                                   config=sensor_consumer_config)
 
+    current_alerts = {}
     while True:
         try:
             msgs = await sub.fetch(batch=10, timeout=2)
 
             alert_tasks: list[Awaitable[None]] = []
 
-            last_sensor_data = (None, None)
             for msg in msgs:
                 logger.debug("Received message: %s" % (msg))
+                subject = msg.subject
                 data = json.loads(msg.data)
                 metadata = msg.metadata
                 try:
@@ -116,7 +118,6 @@ async def main(config: Config):
                     logger.debug("Loaded sensor data: %s" % (sensor_data))
 
                     bounds = config.sensor_bounds[sensor_data.name]
-                    last_sensor_data = (sensor_data, bounds)
                     if sensor_data.value < bounds.min or sensor_data.value > bounds.max:
                         alert_subject = f"{config.nats_alerts_subject_prefix}.{sensor_data.name}"
                         alert = Alert(sensor_data=sensor_data, sensor_bounds=bounds)
@@ -126,46 +127,29 @@ async def main(config: Config):
                         logger.debug("Publishing alert: %s %s" % (alert_subject, alert))
                         task = nc.publish(alert_subject, alert.model_dump_json().encode("utf-8"))
                         alert_tasks.append(task)
+
+                        current_alerts[subject] = alert
+                    else:
+                        # Check if we were previously alerting for this sensor
+                        if subject in current_alerts:
+                            logger.info("Sensor data back to normal: %s" % (sensor_data))
+                            back_to_normal = Alert(
+                                message="Sensor data back to normal",
+                                sensor_data=sensor_data,
+                                sensor_bounds=bounds)
+                            logger.debug("Publishing back-to-normal alert: %s %s" % (alert_subject, back_to_normal))
+                            task = nc.publish(alert_subject, back_to_normal.model_dump_json().encode("utf-8"))
+                            alert_tasks.append(task)
+                            del current_alerts[subject]
                 except pydantic.ValidationError as e:
                     logger.error("Invalid sensor data: %s: %s" % (msg.data.decode(), e))
                 finally:
                     await msg.ack()
 
-            # Load the current state
-            try:
-                with open(args.current_state_file, "r") as f:
-                    current_state = State.model_validate_json(f.read())
-            except FileNotFoundError:
-                current_state = State()
-            logger.debug("Current state: %s" % (current_state))
-
-            if len(alert_tasks) > 0:
-                new_state = State(state=States.ALERTING)
-            else:
-                new_state = State(state=States.NOT_ALERTING)
-            logger.debug("New state: %s" % (new_state))
-
-            with open(args.current_state_file, "w") as f:
-                f.write(new_state.model_dump_json())
-
-            # If there are no alerts, but we are in an alerting state, add an
-            # alert saying the system is back to normal
-            if current_state.state == States.ALERTING and new_state.state == States.NOT_ALERTING \
-                    and last_sensor_data[0] is not None:
-                logger.info("Resetting alerting state")
-
-                back_to_normal = Alert(
-                    message="System back to normal",
-                    sensor_data=last_sensor_data[0],
-                    sensor_bounds=last_sensor_data[1])
-
-                alert_subject = f"{config.nats_alerts_subject_prefix}.{last_sensor_data[0].name}"
-                logger.debug("Publishing back-to-normal alert: %s %s" % (alert_subject, back_to_normal))
-                task = nc.publish(alert_subject, back_to_normal.model_dump_json().encode("utf-8"))
-                alert_tasks.append(task)
-
             # Wait for all alerts to be published
             await asyncio.gather(*alert_tasks)
+
+            logger.debug("Current alerts: %s" % (current_alerts))
 
         except asyncio.TimeoutError:
             pass
@@ -182,8 +166,6 @@ if __name__ == "__main__":
                         default="alerts.climatecore")
     parser.add_argument("--nats-config-subject", type=str, help="NATS config message subject",
                         default="config.climatecore")
-    parser.add_argument("--current-state-file", type=str, help="File to store the current state",
-                        default=os.path.expanduser("~/.synapsteward-climatecore-stage.json"))
     parser.add_argument("--debug", action="store_true", help="Enable debug logging",
                         default=os.environ.get("DEBUG", False))
     args = parser.parse_args()
