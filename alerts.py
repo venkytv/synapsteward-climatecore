@@ -47,49 +47,54 @@ def construct_prompt(alerts: list[Alert], state: str) -> str:
 
     Below are climate sensor alerts from a monitoring system. Your task
     is to analyse these alerts and suggest a colour for the current state of
-    the entire system in hexadecimal format, such as #FF0000 for red.
+    the system in hexadecimal format, such as #FF0000 for red.
     A sample colour is shown below:
     {sample_colour.model_dump_json()}
 
-    Note that the "state" value here is for demonstration only. You can use it
-    to store state in any format or encoding you like as long as it can be
-    stored in a JSON object. The objective is to use this to make sure the
-    colours are consistent across runs and have some logic to how they are
-    assigned for different sensors, locations, etc. Do store the logic for the
-    colour assignment in the "state" field.
-    The sensors can be temperature, humidity, or CO2.
-
     If there is no need for an alert, you can suggest use #000000 for black.
 
-    - {"\n    - ".join([alert.model_dump_json() for alert in alerts])}
+    Note that the "state" value here is for demonstration only. You can use it
+    to store state in any format or encoding you like as long as it can be
+    stored in a JSON object. As you will be computing the colours for the alerts
+    depending on the specific sensor value, urgency, location, etc., you can use
+    the "state" field to keep track of the mapping of colours to specific sensors,
+    or any other state you need to maintain. This field will be passed back to
+    you in the next run.
+
+    The objective is to use the state field to make sure the colours are
+    consistent across runs and have some logic to how they are assigned for
+    different sensors, locations, etc. Attempt to map the colours logically to
+    the sensor names and locations. For instance, you could use green for CO2,
+    blue for humidity, and red for temperature, with cooler shades for the
+    bedroom and warmer shades for the living room. Aim to make the colours
+    easily distinguishable and unambiguous. You can choose from the full range
+    of colours supported by the Philips Hue system.
+
+    Do store the logic for the colour assignment in the "state" field so that
+    you can refer to it in the next run. The "state" field can also be used to
+    keep track of anything else you need to maintain across runs.  Note that
+    the sensors can be one of temperature, humidity, or CO2.
+
+    Use the "brightness" field to indicate the urgency of the alert, with 100
+    being the most urgent and 1 being the least. Do not set the brightness to
+    100 unless the alert is very urgent. Note that the alerts will be addressed
+    by humans, and so might not be addressed immediately. Set the urgency
+    appropriately based on the real world implications of the alert. For
+    instance, a high CO2 of 1200 ppm is something that can be addressed within
+    a few hours, while a high CO2 of 3000 ppm is something that needs to be
+    addressed immediately. Similarly, high humidity of 70% is not very urgent.
+
+    If there are multiple alerts, pick the most urgent one for the colour and
+    brightness.
 
     The last state you provided was: "{state}"
 
-    You can also take into account the time of the day, the day of the week,
-    and the urgency of the alert. Additionally, you can use the "state" field
-    to keep track of anything across runs.  As you will be computing the
-    colours for the alerts depending on the specific sensor value, urgency,
-    location, etc., you can use the "state" field to keep track of the mapping
-    of colours to specific sensors, or any other state you need to maintain.
-    This field will be passed back to you in the next run.
+    The current sensor alerts are:
 
-    Try to pick a colour that is most representative of the current state of
-    the entire system based on the alerts provided. Use location information
-    also to tune the colours in consistent ways so that one can figure out
-    which sensor and location the alert is coming from without having to read
-    the alert. The colour should be easily distinguishable and unambiguous. You
-    can choose from the full range of colours supported by the Philips Hue
-    system.  If there are multiple alerts, pick the most urgent one. Use the
-    "brightness" field to indicate the urgency of the alert, with 100 being the
-    most urgent and 1 being the least.  Do not set the brightness to 100 unless
-    the alert is very urgent.
+    - {"\n    - ".join([alert.model_dump_json() for alert in alerts])}
 
-    Note that the alerts will be addressed by humans, and so might not be
-    addressed immediately. Set the urgency appropriately based on the real
-    world implications of the alert. For instance, a high CO2 of 1200 ppm is
-    something that can be addressed within a few hours, while a high CO2 of
-    3000 ppm is something that needs to be addressed immediately. Similarly,
-    high humidity of 70% is not very urgent.
+    Do also consider the time of the day, the day of the week, and any other
+    information you think is relevant to the colour assignment.
 
     IMPORTANT: RETURN JUST ONE JSON OBJECT WITH THE COLOUR, REASON, AND STATE,
                OR AN OBJECT WITH #000000 COLOUR IF YOU HAVE NO RECOMMENDATIONS.
@@ -194,7 +199,8 @@ async def main():
                     logging.debug(f"Colour: {colour}")
 
                     # Save the state
-                    save_state(args.state_file, colour.state)
+                    state = colour.state
+                    save_state(args.state_file, state)
 
                     # Publish the colour
                     await nc.publish(args.nats_alert_colours_subject,
