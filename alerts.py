@@ -40,15 +40,29 @@ sample_colour = Colour(
     state="rule:green based colors for CO2, blue for humidity, cooler shades for living room, warmer for bedroom;co2_living_room=#2ada75;co2_bedroom=#87da2a",
 )
 
-def construct_prompt(alerts: list[Alert], state: str) -> str:
+def current_state_prompt(alerts: list[Alert]) -> str:
+    prompt = f"""
+    You are an expert in climate monitoring and sensor data. The time now is
+    {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}. Below are climate sensor
+    alerts from a monitoring system. Your task is to analyse these alerts and
+    determine the current state of each sensor. The alerts are in time order.
+    The last event for each sensor is the current state. The alerts are:
+
+    - {"\n    - ".join([alert.model_dump_json() for alert in alerts])}
+
+    Print a concise summary of the current state of the sensors.
+"""
+    return prompt
+
+def construct_prompt(summary: str, state: str) -> str:
     prompt = f"""
     You are an expert in climate monitoring and sensor data
     analysis. The time now is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.
 
-    Below are climate sensor alerts from a monitoring system. Your task
-    is to analyse these alerts and suggest a colour for the current state of
-    the system in hexadecimal format, such as #FF0000 for red.
-    A sample colour is shown below:
+    Below is the summary of the climate sensor alerts from a monitoring system.
+    Your task is to suggest a colour for the current state of the system in
+    hexadecimal format, such as #FF0000 for red. A sample colour is shown below:
+
     {sample_colour.model_dump_json()}
 
     If there is no need for an alert, you can suggest use #000000 for black.
@@ -89,9 +103,9 @@ def construct_prompt(alerts: list[Alert], state: str) -> str:
 
     The last state you provided was: "{state}"
 
-    The current sensor alerts are:
+    The current sensor alerts summary is:
 
-    - {"\n    - ".join([alert.model_dump_json() for alert in alerts])}
+    {summary}
 
     Do also consider the time of the day, the day of the week, and any other
     information you think is relevant to the colour assignment.
@@ -194,7 +208,11 @@ async def main():
 
                 if msgs:
                     all_alerts.extend(msgs)
-                    prompt = construct_prompt(all_alerts, state)
+                    prompt = current_state_prompt(all_alerts)
+                    summary = llm_model.prompt(prompt)
+                    logging.debug(f"Current state summary: {summary}")
+
+                    prompt = construct_prompt(summary, state)
                     colour = load_alert_colour(llm_model, prompt)
                     logging.debug(f"Colour: {colour}")
 
