@@ -163,7 +163,7 @@ async def main():
                         default=os.path.expanduser("~/.climatecore.alerts.state"))
     parser.add_argument("--reload-interval", type=int,
                         help="Interval to reload the alerts in seconds",
-                        default=3600)
+                        default=900)
     parser.add_argument("--llm-model", default=default_llm_model,
                         help="LLM model to use for analysis")
     parser.add_argument("--debug", action="store_true",
@@ -188,7 +188,7 @@ async def main():
     while True:
         # Generate a random consumer name, alphanumerics and underscores only
         consumer = f"{args.nats_consumer}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        logging.debug(f"Consumer: {consumer}")
+        logging.info(f"Starting a fresh run with consumer: {consumer}")
 
         all_alerts = []
 
