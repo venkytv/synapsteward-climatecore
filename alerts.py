@@ -210,11 +210,11 @@ async def main():
                     all_alerts.extend(msgs)
                     prompt = current_state_prompt(all_alerts)
                     summary = llm_model.prompt(prompt)
-                    logging.debug(f"Current state summary: {summary}")
+                    logging.info(f"Current state summary: {summary}")
 
                     prompt = construct_prompt(summary, state)
                     colour = load_alert_colour(llm_model, prompt)
-                    logging.debug(f"Colour: {colour}")
+                    logging.info(f"Colour: {colour}")
 
                     # Save the state
                     state = colour.state
