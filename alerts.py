@@ -40,26 +40,12 @@ sample_colour = Colour(
     state="rule:green based colors for CO2, blue for humidity, cooler shades for living room, warmer for bedroom;co2_living_room=#2ada75;co2_bedroom=#87da2a",
 )
 
-def current_state_prompt(alerts: list[Alert]) -> str:
-    prompt = f"""
-    You are an expert in climate monitoring and sensor data. The time now is
-    {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}. Below are climate sensor
-    alerts from a monitoring system. Your task is to analyse these alerts and
-    determine the current state of each sensor. The alerts are in time order.
-    The last event for each sensor is the current state. The alerts are:
-
-    - {"\n    - ".join([alert.model_dump_json() for alert in alerts])}
-
-    Print a concise summary of the current state of the sensors.
-"""
-    return prompt
-
-def construct_prompt(summary: str, state: str) -> str:
+def construct_prompt(alerts: list[Alert], state: str) -> str:
     prompt = f"""
     You are an expert in climate monitoring and sensor data
     analysis. The time now is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.
 
-    Below is the summary of the climate sensor alerts from a monitoring system.
+    Below is the current status of climate sensor alerts from a monitoring system.
     Your task is to suggest a colour for the current state of the system in
     hexadecimal format, such as #FF0000 for red. A sample colour is shown below:
 
@@ -103,9 +89,9 @@ def construct_prompt(summary: str, state: str) -> str:
 
     The last state you provided was: "{state}"
 
-    The current sensor alerts summary is:
+    The current sensor alerts status is:
 
-    {summary}
+    - {"\n    - ".join([alert.model_dump_json() for alert in alerts])}
 
     Do also consider the time of the day, the day of the week, and any other
     information you think is relevant to the colour assignment.
@@ -190,7 +176,8 @@ async def main():
         consumer = f"{args.nats_consumer}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         logging.info(f"Starting a fresh run with consumer: {consumer}")
 
-        all_alerts = []
+        # Record the latest state for each sensor
+        current_status = {}
 
         try:
             alerts = Stream(
@@ -206,23 +193,28 @@ async def main():
                 msgs = await alerts.get_messages(nmsgs=50)
                 logging.debug(f"{len(msgs)} alerts received")
 
-                if msgs:
-                    all_alerts.extend(msgs)
-                    prompt = current_state_prompt(all_alerts)
-                    summary = llm_model.prompt(prompt)
-                    logging.info(f"Current state summary: {summary}")
+                if not msgs:
+                    time.sleep(10)
+                    continue
 
-                    prompt = construct_prompt(summary, state)
-                    colour = load_alert_colour(llm_model, prompt)
-                    logging.info(f"Colour: {colour}")
+                for alert in msgs:
+                    logging.debug(f"Alert: {alert}")
 
-                    # Save the state
-                    state = colour.state
-                    save_state(args.state_file, state)
+                    # Update the current status for the sensor
+                    key = f"{alert.sensor_data.name}_{alert.sensor_data.location}"
+                    current_status[key] = alert
 
-                    # Publish the colour
-                    await nc.publish(args.nats_alert_colours_subject,
-                                     colour.model_dump_json().encode("utf-8"))
+                prompt = construct_prompt(list(current_status.values()), state)
+                colour = load_alert_colour(llm_model, prompt)
+                logging.info(f"Colour: {colour}")
+
+                # Save the state
+                state = colour.state
+                save_state(args.state_file, state)
+
+                # Publish the colour
+                await nc.publish(args.nats_alert_colours_subject,
+                                 colour.model_dump_json().encode("utf-8"))
 
         finally:
             logging.debug(f"Deleting consumer {consumer}")
